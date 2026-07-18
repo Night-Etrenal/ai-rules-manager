@@ -181,6 +181,9 @@ def detect_mount(path: Path, mountinfo: Path = Path("/proc/self/mountinfo")) -> 
 def _validate_codex_home(home: Path, *, for_write: bool, filesystem_detector: FilesystemDetector) -> MountInfo:
     if not home.exists() or not home.is_dir():
         raise FileNotFoundError(home)
+    resolved = home.resolve(strict=True)
+    if resolved != home:
+        raise UnsafeCodexHomeError(f"CODEX_HOME must not contain symlink components: {home}")
     info = home.lstat()
     if stat.S_ISLNK(info.st_mode):
         raise UnsafeCodexHomeError(f"CODEX_HOME must not be a symlink: {home}")
@@ -399,8 +402,13 @@ def _backup_database(
         )
     root = (backup_root or (db.parent / "backups")).expanduser().absolute()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if root.is_symlink():
-        raise UnsafeCodexHomeError(f"backup root must not be a symlink: {root}")
+    if root.is_symlink() or root.resolve(strict=True) != root:
+        raise UnsafeCodexHomeError(f"backup root must not contain symlink components: {root}")
+    backup_mount = detect_mount(root)
+    if backup_mount.filesystem.lower() in UNSAFE_FILESYSTEMS or backup_mount.filesystem.lower().startswith("fuse.sshfs"):
+        raise UnsafeCodexHomeError(
+            f"refusing backup on unsafe filesystem {backup_mount.filesystem!r} mounted at {backup_mount.mount_point}"
+        )
     os.chmod(root, 0o700)
     count, existing_total = _existing_backup_usage(root)
     if count >= max_backup_count:
