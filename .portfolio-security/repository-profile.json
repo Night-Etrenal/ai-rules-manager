@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "repository_type": "independent-derivative",
+  "upstream_repository": "OthmanAdi/planning-with-files",
+  "upstream_branch": "master",
+  "upstream_snapshot_branch": "upstream/planning-with-files",
+  "sync_policy": "review-upstream-then-selectively-port",
+  "direct_upstream_merge_into_product": false,
+  "auto_merge": false,
+  "execute_upstream_code_during_review": false,
+  "scanner_mode": "repository",
+  "managed_platform": "debian",
+  "default_agent_access": "workspace-write-on-request"
+}
