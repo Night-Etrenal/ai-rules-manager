@@ -68,8 +68,16 @@ class Finding:
 
 
 def run_git(root: Path, *args: str, check: bool = True) -> bytes:
+    resolved_root = root.resolve()
     proc = subprocess.run(
-        ["git", "-C", str(root), *args],
+        [
+            "git",
+            "-c",
+            f"safe.directory={resolved_root}",
+            "-C",
+            str(resolved_root),
+            *args,
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
