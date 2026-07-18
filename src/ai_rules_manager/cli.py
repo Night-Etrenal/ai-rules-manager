@@ -200,7 +200,8 @@ def _print_io_audit(result) -> None:
     print(f"WAL growth: {_human_bytes(result.wal_growth_bytes)} ({_human_bytes(result.wal_bytes_per_second)}/s)")
     print(f"MAX(id) growth: {result.max_id_growth if result.max_id_growth is not None else 'unknown'}")
     print(f"id rate: {result.ids_per_second:.2f}/s" if result.ids_per_second is not None else "id rate: unknown")
-    print(f"TRACE rows: {last.trace_count if last.trace_count is not None else 'unknown'}")
+    print(f"row count: {last.row_count if last.row_count is not None else 'not sampled'}")
+    print(f"TRACE rows: {last.trace_count if last.trace_count is not None else 'not sampled'}")
     print(f"guard trigger: {'installed' if last.trigger_installed else 'not installed'}")
     if last.query_error:
         print(f"query warning: {last.query_error}")
@@ -212,6 +213,7 @@ def command_codex_io_audit(args: argparse.Namespace) -> int:
         args.codex_home,
         samples=args.samples,
         interval=args.interval,
+        include_counts=args.details,
     )
     if args.json:
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
@@ -308,6 +310,7 @@ def build_parser() -> argparse.ArgumentParser:
     io_audit.add_argument("--codex-home")
     io_audit.add_argument("--samples", type=int, default=2)
     io_audit.add_argument("--interval", type=float, default=15.0)
+    io_audit.add_argument("--details", action="store_true", help="also run full row and TRACE counts")
     io_audit.add_argument("--json", action="store_true")
     io_audit.set_defaults(func=command_codex_io_audit)
 
