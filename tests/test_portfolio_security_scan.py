@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,12 +14,14 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "portfolio_securit
 SPEC = importlib.util.spec_from_file_location("portfolio_security_scan", MODULE_PATH)
 assert SPEC and SPEC.loader
 scanner = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = scanner
 SPEC.loader.exec_module(scanner)
 
 
 class PortfolioSecurityScannerTests(unittest.TestCase):
     def make_repo(self) -> Path:
         root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
         subprocess.run(["git", "init", "-q", str(root)], check=True)
         subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.com"], check=True)
         subprocess.run(["git", "-C", str(root), "config", "user.name", "Test"], check=True)
@@ -69,7 +73,9 @@ class PortfolioSecurityScannerTests(unittest.TestCase):
         root = self.make_repo()
         (root / "upstream.txt").write_text("sk-" + "B" * 40, encoding="utf-8")
         self.commit(root)
-        upstream = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        upstream = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        ).strip()
         (root / "AGENTS.md").write_text("local overlay\n", encoding="utf-8")
         self.commit(root)
         findings = scanner.scan(root, "overlay", upstream)
