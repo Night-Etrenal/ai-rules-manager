@@ -2,7 +2,7 @@
 id = "platform.debian-only"
 title = "Debian Platform"
 scope = "platform"
-priority = 900
+priority = 899
 key = "platform.os"
 value = "debian"
 category = "platform"
