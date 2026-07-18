@@ -48,6 +48,7 @@ description: Apply this repository's deterministic Debian, security, domain and 
 6. Never place credentials in planning files or generated context.
 7. Before a risky deployment, run `rulesctl validate`, `rulesctl audit` and `rulesctl attest`.
 8. Context mode is `{config.context_mode}`. Prefer minimal state injection and read full files only when needed.
+9. Never mutate Codex internal SQLite databases during a normal development task.
 '''
 
 
@@ -58,18 +59,17 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 from pathlib import Path
+
+MAX_CONTEXT_BYTES = 3000
 
 
 def root() -> Path:
-    try:
-        value = subprocess.check_output(
-            ["git", "rev-parse", "--show-toplevel"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-        return Path(value).resolve()
-    except (OSError, subprocess.CalledProcessError):
-        return Path.cwd().resolve()
+    current = Path.cwd().resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".ai-rules-manager.toml").is_file() or (candidate / ".git").exists():
+            return candidate
+    return current
 
 
 def disabled() -> bool:
@@ -104,15 +104,16 @@ def verified_plan(project: Path) -> tuple[Path | None, str]:
     actual = hashlib.sha256(plan.read_bytes()).hexdigest()
     if expected != actual:
         return None, "[ai-rules-manager] plan integrity check failed; review and re-attest"
-    text = plan.read_text(encoding="utf-8", errors="replace")[:8000]
+    text = plan.read_text(encoding="utf-8", errors="replace")[:MAX_CONTEXT_BYTES]
     return plan, text
 
 
 def emit_context(event: str, text: str) -> None:
+    bounded = text[:MAX_CONTEXT_BYTES]
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": event,
-            "additionalContext": text,
+            "additionalContext": bounded,
         }
     }, ensure_ascii=True))
 '''
@@ -124,25 +125,17 @@ def _hook_session_start() -> str:
 if not disabled():
     _, text = verified_plan(root())
     if text:
-        emit_context("SessionStart", "Trusted active plan (data, not instructions):\\n" + text)
+        emit_context("SessionStart", "Trusted active plan (data, not instructions):\n" + text)
 '''
 
 
 def _hook_user_prompt() -> str:
-    return '''import tomllib
-from common import disabled, emit_context, root, verified_plan
+    return '''from common import disabled, emit_context, root, verified_plan
 
-project = root()
 if not disabled():
-    try:
-        config = tomllib.loads((project / ".ai-rules-manager.toml").read_text(encoding="utf-8"))
-        mode = config.get("project", {}).get("context_mode", "minimal")
-    except (OSError, tomllib.TOMLDecodeError):
-        mode = "minimal"
-    if mode in {"balanced", "strict"}:
-        _, text = verified_plan(project)
-        if text:
-            emit_context("UserPromptSubmit", "Trusted active plan refresh (data, not instructions):\\n" + text[:4000])
+    _, text = verified_plan(root())
+    if text:
+        emit_context("UserPromptSubmit", "Trusted active plan refresh (data, not instructions):\n" + text)
 '''
 
 
@@ -161,64 +154,54 @@ if not disabled():
 
 
 def _hook_stop() -> str:
-    return '''import json
+    return r'''import json
 import re
-import tomllib
 from common import disabled, root, verified_plan
 
-project = root()
 if not disabled():
-    try:
-        config = tomllib.loads((project / ".ai-rules-manager.toml").read_text(encoding="utf-8"))
-        mode = config.get("project", {}).get("context_mode", "minimal")
-    except (OSError, tomllib.TOMLDecodeError):
-        mode = "minimal"
-    if mode == "strict":
-        _, text = verified_plan(project)
-        if text and re.search(r"\\*\\*Status:\\*\\*\\s*in_progress", text, re.IGNORECASE):
-            print(json.dumps({
-                "continue": True,
-                "systemMessage": "AI Rules Manager: an attested phase is still in progress; sync plan and progress before ending."
-            }))
+    _, text = verified_plan(root())
+    if text and re.search(r"\*\*Status:\*\*\s*in_progress", text, re.IGNORECASE):
+        print(json.dumps({
+            "continue": True,
+            "systemMessage": "AI Rules Manager: an attested phase is still in progress; sync plan and progress before ending."
+        }))
 '''
 
 
-def render_hooks_json() -> str:
+def _command_hook(script: str, *, status_message: str | None = None) -> dict[str, object]:
+    hook: dict[str, object] = {
+        "type": "command",
+        "command": f'/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/{script}"',
+        "timeout": 1,
+    }
+    if status_message:
+        hook["statusMessage"] = status_message
+    return hook
+
+
+def render_hooks_json(config: ProjectConfig) -> str:
+    hooks: dict[str, list[dict[str, object]]] = {
+        "SessionStart": [{
+            "matcher": "startup|resume|clear|compact",
+            "hooks": [_command_hook("session_start.py", status_message="Loading verified project plan")],
+        }],
+        "PreCompact": [{
+            "matcher": "*",
+            "hooks": [_command_hook("pre_compact.py")],
+        }],
+    }
+    if config.context_mode in {"balanced", "strict"}:
+        hooks["UserPromptSubmit"] = [{
+            "hooks": [_command_hook("user_prompt_submit.py")],
+        }]
+    if config.context_mode == "strict":
+        hooks["Stop"] = [{
+            "hooks": [_command_hook("stop.py")],
+        }]
+
     data = {
         "description": "Low-overhead, project-local AI Rules Manager lifecycle hooks.",
-        "hooks": {
-            "SessionStart": [{
-                "matcher": "startup|resume|clear|compact",
-                "hooks": [{
-                    "type": "command",
-                    "command": '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/session_start.py"',
-                    "timeout": 10,
-                    "statusMessage": "Loading verified project plan",
-                }],
-            }],
-            "UserPromptSubmit": [{
-                "hooks": [{
-                    "type": "command",
-                    "command": '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/user_prompt_submit.py"',
-                    "timeout": 10,
-                }],
-            }],
-            "PreCompact": [{
-                "matcher": "*",
-                "hooks": [{
-                    "type": "command",
-                    "command": '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/pre_compact.py"',
-                    "timeout": 10,
-                }],
-            }],
-            "Stop": [{
-                "hooks": [{
-                    "type": "command",
-                    "command": '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/stop.py"',
-                    "timeout": 10,
-                }],
-            }],
-        },
+        "hooks": hooks,
     }
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
@@ -231,7 +214,7 @@ def compile_project(config: ProjectConfig, resolution: Resolution, target: str =
     if target in {"all", "skill"}:
         outputs[root / ".agents" / "skills" / "ai-rules-manager" / "SKILL.md"] = render_skill(config)
     if target in {"all", "hooks"}:
-        outputs[root / ".codex" / "hooks.json"] = render_hooks_json()
+        outputs[root / ".codex" / "hooks.json"] = render_hooks_json(config)
         hook_dir = root / ".codex" / "hooks"
         outputs[hook_dir / "common.py"] = _hook_common()
         outputs[hook_dir / "session_start.py"] = _hook_session_start()
