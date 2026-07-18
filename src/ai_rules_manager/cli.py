@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from .audit import audit_project, write_report
+from .codex_io import (
+    apply_log_guard,
+    audit_codex_io,
+    find_codex_processes,
+    resolve_codex_home,
+    restore_log_writes,
+    take_snapshot,
+)
 from .compiler import compile_project
 from .config import CONFIG_NAME, available_bundles, find_project_root, load_config, load_rules
 from .planning import attest, create_plan, phase_status, resolve_plan_dir, verify_attestation
@@ -164,6 +173,96 @@ def command_attest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _human_bytes(value: float) -> str:
+    negative = value < 0
+    amount = abs(float(value))
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    unit = units[0]
+    for candidate in units:
+        unit = candidate
+        if amount < 1024 or candidate == units[-1]:
+            break
+        amount /= 1024
+    prefix = "-" if negative else ""
+    return f"{prefix}{amount:.2f} {unit}"
+
+
+def _print_io_audit(result) -> None:
+    first = result.snapshots[0]
+    last = result.snapshots[-1]
+    print("Codex local I/O audit")
+    print(f"database: {result.database}")
+    print(f"codex active: {'yes' if result.processes else 'no'}")
+    for process in result.processes:
+        print(f"  pid={process.pid} {process.command}")
+    print(f"samples: {len(result.snapshots)} over {result.duration_seconds:.2f}s")
+    print(f"WAL: {_human_bytes(first.wal_bytes)} -> {_human_bytes(last.wal_bytes)}")
+    print(f"WAL growth: {_human_bytes(result.wal_growth_bytes)} ({_human_bytes(result.wal_bytes_per_second)}/s)")
+    print(f"MAX(id) growth: {result.max_id_growth if result.max_id_growth is not None else 'unknown'}")
+    print(f"id rate: {result.ids_per_second:.2f}/s" if result.ids_per_second is not None else "id rate: unknown")
+    print(f"TRACE rows: {last.trace_count if last.trace_count is not None else 'unknown'}")
+    print(f"guard trigger: {'installed' if last.trigger_installed else 'not installed'}")
+    if last.query_error:
+        print(f"query warning: {last.query_error}")
+    print(f"risk: {result.risk}")
+
+
+def command_codex_io_audit(args: argparse.Namespace) -> int:
+    result = audit_codex_io(
+        args.codex_home,
+        samples=args.samples,
+        interval=args.interval,
+    )
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+    else:
+        _print_io_audit(result)
+    return 0
+
+
+def command_codex_io_guard(args: argparse.Namespace) -> int:
+    home = resolve_codex_home(args.codex_home)
+    if not args.apply:
+        snapshot = take_snapshot(home)
+        processes = find_codex_processes()
+        print("dry-run: no database changes were made")
+        print(f"database: {home / 'logs_2.sqlite'}")
+        print(f"codex active: {'yes' if processes else 'no'}")
+        print(f"WAL: {_human_bytes(snapshot.wal_bytes)}")
+        print(f"guard trigger: {'installed' if snapshot.trigger_installed else 'not installed'}")
+        print("apply only after all Codex processes exit: rulesctl codex-io-guard --apply")
+        return 0
+    result = apply_log_guard(home)
+    print(f"guard installed: {result.database}")
+    print(f"backup: {result.backup_dir}")
+    print(
+        "checkpoint: "
+        f"busy={result.checkpoint_busy} frames={result.checkpoint_frames} "
+        f"checkpointed={result.checkpointed_frames}"
+    )
+    return 0 if result.checkpoint_busy == 0 else 1
+
+
+def command_codex_io_restore(args: argparse.Namespace) -> int:
+    home = resolve_codex_home(args.codex_home)
+    if not args.apply:
+        snapshot = take_snapshot(home)
+        print("dry-run: no database changes were made")
+        print(f"database: {home / 'logs_2.sqlite'}")
+        print(f"guard trigger: {'installed' if snapshot.trigger_installed else 'not installed'}")
+        print("remove the guard only after all Codex processes exit: rulesctl codex-io-restore --apply")
+        return 0
+    result = restore_log_writes(home)
+    print(f"normal log writes restored: {result.database}")
+    print(f"backup: {result.backup_dir}")
+    print(
+        "checkpoint: "
+        f"busy={result.checkpoint_busy} frames={result.checkpoint_frames} "
+        f"checkpointed={result.checkpointed_frames}"
+    )
+    return 0 if result.checkpoint_busy == 0 else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="rulesctl", description="AI Rules Manager")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -204,6 +303,23 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--show", action="store_true")
     group.add_argument("--clear", action="store_true")
     attest_parser.set_defaults(func=command_attest)
+
+    io_audit = sub.add_parser("codex-io-audit", help="read-only sampling of Codex SQLite/WAL activity")
+    io_audit.add_argument("--codex-home")
+    io_audit.add_argument("--samples", type=int, default=2)
+    io_audit.add_argument("--interval", type=float, default=15.0)
+    io_audit.add_argument("--json", action="store_true")
+    io_audit.set_defaults(func=command_codex_io_audit)
+
+    io_guard = sub.add_parser("codex-io-guard", help="offline backup and SQLite log INSERT guard")
+    io_guard.add_argument("--codex-home")
+    io_guard.add_argument("--apply", action="store_true", help="explicitly apply after all Codex processes exit")
+    io_guard.set_defaults(func=command_codex_io_guard)
+
+    io_restore = sub.add_parser("codex-io-restore", help="offline removal of the SQLite log guard")
+    io_restore.add_argument("--codex-home")
+    io_restore.add_argument("--apply", action="store_true", help="explicitly restore after all Codex processes exit")
+    io_restore.set_defaults(func=command_codex_io_restore)
     return parser
 
 
@@ -212,6 +328,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
