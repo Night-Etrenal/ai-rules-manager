@@ -14,24 +14,22 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - debian:bookworm-slim
-          - debian:trixie-slim
+          - debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+          - debian:trixie-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd
     container:
       image: ${{ matrix.image }}
     steps:
       - name: Install Debian test tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git python3 python3-pip python3-venv
+          apt-get install -y --no-install-recommends ca-certificates git python3 python3-pip python3-setuptools python3-venv
           rm -rf /var/lib/apt/lists/*
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Create virtual environment
         run: python3 -m venv .venv
-      - name: Install package
-        run: |
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -e .
-      - name: Run tests
-        run: .venv/bin/python -m unittest discover -s tests -v
+      - name: Install package without network build isolation
+        run: .venv/bin/python -m pip install --no-build-isolation -e .
+      - name: Run tests with resource warnings as errors
+        run: .venv/bin/python -W error::ResourceWarning -m unittest discover -s tests -v
       - name: Compile Python sources
         run: .venv/bin/python -m compileall -q src tests
