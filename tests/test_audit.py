@@ -20,6 +20,14 @@ class AuditTests(unittest.TestCase):
             findings = audit_project(root)
             self.assertTrue(any(item.code == "PROMPT_INJECTION" for item in findings))
 
+    def test_skips_large_generated_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generated = root / "node_modules"
+            generated.mkdir()
+            (generated / "secret.md").write_text("api_key = abcdefghijklmnopqrstuvwxyz")
+            self.assertFalse(audit_project(root))
+
 
 if __name__ == "__main__":
     unittest.main()
