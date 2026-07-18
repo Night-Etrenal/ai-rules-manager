@@ -16,17 +16,19 @@ Defaults:
 - samples: 2
 - interval: 15 seconds
 - database connection: SQLite `mode=ro` plus `PRAGMA query_only=ON`
+- fast path: file sizes plus indexed `MAX(id)` only
 - no checkpoint, vacuum, trigger, process termination or background monitor
 
 Custom sampling:
 
 ```bash
 rulesctl codex-io-audit --samples 3 --interval 10
+rulesctl codex-io-audit --details
 rulesctl codex-io-audit --json
 rulesctl codex-io-audit --codex-home /home/night/.codex
 ```
 
-The audit reports Codex processes, WAL growth, `MAX(id)` growth, TRACE row count when the schema exposes a `level` column, guard status and a risk level. A critical result does not stop the active development session.
+The default audit reports Codex processes, WAL growth, `MAX(id)` growth, guard status and a risk level. `--details` additionally runs full row and TRACE counts and should be used only when that extra scan is needed. A critical result does not stop the active development session.
 
 ## Dry-run maintenance check
 
