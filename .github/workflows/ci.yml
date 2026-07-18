@@ -25,7 +25,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Scan Git-tracked repository files
-        run: python3 tools/portfolio_security_scan.py --root . --mode repository
+        id: repository_scan
+        shell: sh
+        run: |
+          set +e
+          python3 tools/portfolio_security_scan.py --root . --mode repository > security-findings.txt
+          status=$?
+          cat security-findings.txt
+          exit "$status"
+      - name: Upload redacted findings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: portfolio-security-findings
+          path: security-findings.txt
+          if-no-files-found: error
+          retention-days: 7
 
   test:
     needs: security
