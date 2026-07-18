@@ -19,7 +19,6 @@ jobs:
             cat /tmp/apt-security.log
             exit 1
           fi
-          rm -rf /var/lib/apt/lists/* /tmp/apt-security.log
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
@@ -29,7 +28,7 @@ jobs:
         shell: sh
         run: |
           set +e
-          python3 tools/portfolio_security_scan.py --root . --mode repository > security-findings.txt
+          python3 tools/portfolio_security_scan.py --root . --mode repository > security-findings.txt 2>&1
           status=$?
           cat security-findings.txt
           exit "$status"
@@ -58,7 +57,6 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates git python3 python3-pip python3-setuptools python3-venv python3-wheel
-          rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
