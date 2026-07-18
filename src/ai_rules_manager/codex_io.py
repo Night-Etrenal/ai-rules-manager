@@ -137,7 +137,9 @@ def _readonly_connection(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def take_snapshot(codex_home: str | Path | None = None) -> IOSnapshot:
+def take_snapshot(
+    codex_home: str | Path | None = None, *, include_counts: bool = False
+) -> IOSnapshot:
     db = database_path(codex_home)
     if not db.is_file():
         raise FileNotFoundError(db)
@@ -160,15 +162,13 @@ def take_snapshot(codex_home: str | Path | None = None) -> IOSnapshot:
             if table_exists:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(logs)")}
                 if "id" in columns:
-                    max_id, row_count = connection.execute(
-                        "SELECT MAX(id), COUNT(*) FROM logs"
-                    ).fetchone()
-                else:
+                    max_id = connection.execute("SELECT MAX(id) FROM logs").fetchone()[0]
+                if include_counts:
                     row_count = connection.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
-                if "level" in columns:
-                    trace_count = connection.execute(
-                        "SELECT COUNT(*) FROM logs WHERE UPPER(CAST(level AS TEXT)) = 'TRACE'"
-                    ).fetchone()[0]
+                    if "level" in columns:
+                        trace_count = connection.execute(
+                            "SELECT COUNT(*) FROM logs WHERE UPPER(CAST(level AS TEXT)) = 'TRACE'"
+                        ).fetchone()[0]
     except sqlite3.Error as exc:
         query_error = str(exc)
 
@@ -202,6 +202,7 @@ def audit_codex_io(
     interval: float = 15.0,
     process_detector: ProcessDetector = find_codex_processes,
     sleeper: Callable[[float], None] = time.sleep,
+    include_counts: bool = False,
 ) -> IOAuditResult:
     if samples < 1 or samples > 10:
         raise ValueError("samples must be between 1 and 10")
@@ -211,7 +212,7 @@ def audit_codex_io(
     home = resolve_codex_home(codex_home)
     captured: list[IOSnapshot] = []
     for index in range(samples):
-        captured.append(take_snapshot(home))
+        captured.append(take_snapshot(home, include_counts=include_counts))
         if index + 1 < samples:
             sleeper(interval)
 
