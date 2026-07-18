@@ -1,0 +1,32 @@
+[[rules]]
+id = "security.no-secrets-in-context"
+title = "No Secrets in Agent Context"
+scope = "security"
+priority = 1000
+key = "security.secret_context"
+value = "deny"
+category = "security"
+instruction = "Never write credentials, private keys, session cookies or live tokens into AGENTS.md, planning files, prompts, logs or generated reports."
+tags = ["secrets"]
+
+[[rules]]
+id = "security.review-hooks"
+title = "Review Lifecycle Hooks"
+scope = "security"
+priority = 980
+key = "security.hook_trust"
+value = "explicit-review"
+category = "security"
+instruction = "Treat every new or changed lifecycle hook as executable code; inspect the exact command and approve it explicitly before use."
+tags = ["hooks", "supply-chain"]
+
+[[rules]]
+id = "security.read-only-default"
+title = "Read-only Default"
+scope = "security"
+priority = 950
+key = "security.execution_default"
+value = "read-only"
+category = "security"
+instruction = "Prefer read-only inspection. Require an explicit task need before mutating infrastructure, repositories, accounts or production data."
+tags = ["least-privilege"]

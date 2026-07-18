@@ -1,0 +1,21 @@
+[[rules]]
+id = "domain.infrastructure.idempotent"
+title = "Idempotent Infrastructure Changes"
+scope = "domain"
+priority = 600
+key = "domain.infrastructure.change_model"
+value = "idempotent"
+category = "infrastructure"
+instruction = "Infrastructure changes must be repeatable, bounded and safe to rerun; prefer declarative automation over ad-hoc remote commands."
+tags = ["ansible", "operations"]
+
+[[rules]]
+id = "domain.infrastructure.rollback"
+title = "Rollback Required"
+scope = "domain"
+priority = 590
+key = "domain.infrastructure.rollback"
+value = "required"
+category = "infrastructure"
+instruction = "Before deployment, define the rollback trigger, rollback command and evidence that confirms recovery."
+tags = ["deployment"]

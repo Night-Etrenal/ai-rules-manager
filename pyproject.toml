@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-rules-manager"
+version = "0.1.0"
+description = "Deterministic policy, context and workflow manager for AI coding agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "AI Rules Manager contributors" }]
+keywords = ["codex", "ai-agents", "rules", "context-engineering", "debian", "security"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[project.scripts]
+rulesctl = "ai_rules_manager.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Night-Etrenal/ai-rules-manager"
+Issues = "https://github.com/Night-Etrenal/ai-rules-manager/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ai_rules_manager = ["bundles/**/*.toml", "templates/**/*"]

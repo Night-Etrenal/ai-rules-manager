@@ -1,0 +1,32 @@
+[[rules]]
+id = "platform.debian-only"
+title = "Debian Platform"
+scope = "platform"
+priority = 900
+key = "platform.os"
+value = "debian"
+category = "platform"
+instruction = "Assume Debian, not Ubuntu. Use Debian repositories, paths, package names and service behavior unless the repository proves otherwise."
+tags = ["debian"]
+
+[[rules]]
+id = "platform.debian-apt"
+title = "APT Package Management"
+scope = "platform"
+priority = 880
+key = "platform.package_manager"
+value = "apt"
+category = "platform"
+instruction = "Use apt and signed Debian-compatible repositories. Do not recommend Ubuntu PPAs."
+tags = ["debian", "packages"]
+
+[[rules]]
+id = "platform.systemd"
+title = "systemd Services"
+scope = "platform"
+priority = 820
+key = "platform.service_manager"
+value = "systemd"
+category = "platform"
+instruction = "Use systemd units, systemctl and journalctl for managed services; include idempotent enable/start and rollback behavior."
+tags = ["operations"]

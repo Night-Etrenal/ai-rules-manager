@@ -1,0 +1,21 @@
+[[rules]]
+id = "domain.quant.no-live-trading"
+title = "No Live Trading by Default"
+scope = "domain"
+priority = 620
+key = "domain.quant.execution"
+value = "research-only"
+category = "quantitative research"
+instruction = "Keep strategies in research, backtest or paper-trading mode unless live execution is separately reviewed and explicitly enabled."
+tags = ["risk", "trading"]
+
+[[rules]]
+id = "domain.quant.no-lookahead"
+title = "Prevent Look-ahead Bias"
+scope = "domain"
+priority = 610
+key = "domain.quant.lookahead"
+value = "deny"
+category = "quantitative research"
+instruction = "Align every feature and label to information available at decision time; test for leakage and survivorship bias."
+tags = ["backtest", "quality"]

@@ -1,0 +1,21 @@
+[[rules]]
+id = "domain.digital-products.delivery-idempotency"
+title = "Idempotent Digital Delivery"
+scope = "domain"
+priority = 580
+key = "domain.digital_products.delivery"
+value = "idempotent"
+category = "digital products"
+instruction = "Order fulfillment and license delivery must be idempotent, auditable and safe against duplicate callbacks."
+tags = ["commerce", "delivery"]
+
+[[rules]]
+id = "domain.digital-products.entitlement"
+title = "Server-side Entitlements"
+scope = "domain"
+priority = 570
+key = "domain.digital_products.entitlement"
+value = "server-verified"
+category = "digital products"
+instruction = "Validate licenses, subscriptions and download entitlements on the server; never trust a client-only paid flag."
+tags = ["licensing", "security"]

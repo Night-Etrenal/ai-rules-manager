@@ -1,0 +1,21 @@
+[[rules]]
+id = "domain.blockchain.read-only"
+title = "Read-only Chain Analysis"
+scope = "domain"
+priority = 630
+key = "domain.blockchain.transaction_mode"
+value = "read-only"
+category = "blockchain analysis"
+instruction = "Default to RPC reads, event indexing and historical analysis. Do not sign or broadcast transactions."
+tags = ["blockchain", "risk"]
+
+[[rules]]
+id = "domain.blockchain.address-normalization"
+title = "Normalize Addresses"
+scope = "domain"
+priority = 560
+key = "domain.blockchain.address_format"
+value = "chain-aware"
+category = "blockchain analysis"
+instruction = "Normalize and validate addresses using the target chain's rules before joins, scoring or deduplication."
+tags = ["data-quality"]
