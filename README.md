@@ -8,6 +8,7 @@ AI Rules Manager 是一个面向 AI 编程代理的确定性规则、上下文�
 - OpenAI Codex 的 `AGENTS.md`、`.agents/skills` 与 `.codex/hooks.json`
 - 规则分层、优先级解析和冲突检测
 - 长任务计划持久化、SHA-256 完整性校验和上下文恢复
+- Codex 本地 SQLite/WAL 只读审计与显式离线保护
 - 零运行时第三方依赖，Python 3.11+
 
 ## 为什么不是简单复刻
@@ -66,15 +67,37 @@ rulesctl attest --show
 rulesctl attest --clear
 ```
 
+## Codex 本地写盘保护
+
+开发过程中只执行只读采样，不结束会话、不 checkpoint、不修改 trigger：
+
+```bash
+rulesctl codex-io-audit
+rulesctl codex-io-audit --samples 3 --interval 10
+rulesctl codex-io-audit --json
+```
+
+`codex-io-guard` 和 `codex-io-restore` 默认都是 dry-run。只有显式传入 `--apply`，并且检测不到任何 Codex/app-server 进程时，才允许离线修改：
+
+```bash
+# 先保存工作并完全退出 Codex
+rulesctl codex-io-guard --apply
+
+# 官方修复后或需要恢复诊断日志时
+rulesctl codex-io-restore --apply
+```
+
+Guard 会先备份 `logs_2.sqlite`、WAL 和 SHM，执行完整性检查，再创建可逆的 INSERT 拦截 trigger 并 truncate WAL。正常的 `init`、`compile`、`audit`、计划和 hooks 流程永远不会触碰 `CODEX_HOME`。完整说明见 `docs/codex-local-io.md`。
+
 ## Context Mode
 
-| 模式 | 行为 | 推荐场景 |
+| 模式 | 生成的 hooks | 推荐场景 |
 |---|---|---|
-| `minimal` | 会话启动和上下文恢复时注入计划摘要 | 默认；控制 Token 成本 |
-| `balanced` | 在 `minimal` 基础上，每次用户提交时刷新摘要 | 多阶段开发 |
-| `strict` | 在 `balanced` 基础上，结束前检查未完成阶段 | 高风险部署、事故处理 |
+| `minimal` | `SessionStart`、`PreCompact` | 默认；最低额外 I/O 与 Token 成本 |
+| `balanced` | minimal + `UserPromptSubmit` | 需要每轮刷新计划的多阶段开发 |
+| `strict` | balanced + 非阻塞 `Stop` 提示 | 高风险部署、事故处理 |
 
-首版不会自动阻塞 Codex 停止，也不会自动执行部署命令。hooks 只读取本仓库内已验证的状态文件并返回提示。
+所有生成 hook 的超时上限为 1 秒，计划上下文限制为 3,000 字符；hooks 不扫描 `CODEX_HOME`、不调用 SQLite、不启动后台任务，也不递归遍历仓库。
 
 ## 安全原则
 
@@ -84,6 +107,8 @@ rulesctl attest --clear
 4. hooks 使用仓库根目录绝对解析，不信任当前子目录相对路径。
 5. `PLANNING_DISABLED=1` 可为一次性 Codex 任务关闭所有计划 hooks。
 6. 项目级 hooks 必须由用户在 Codex `/hooks` 中审查并信任。
+7. Codex 内部数据库维护必须显式、离线、先备份后修改；正在开发时只允许只读观察。
+8. 项目规则、任务规则和领域规则不能进入平台/安全保留优先级区间。
 
 ## 测试
 
@@ -91,6 +116,8 @@ rulesctl attest --clear
 python -m unittest discover -s tests -v
 ```
 
+CI 在 Debian Bookworm 和 Debian Trixie 容器中执行安装、测试和 Python 编译检查。
+
 ## 状态
 
-`0.1.0` 是可运行的独立 MVP。当前只承诺 Debian 与 Codex；Windows、Claude Code、Cursor、Kiro、Pi、OpenCode 等适配不在首版支持范围。
+`0.1.0` 是可运行的独立 MVP。当前只承诺 Debian 与 Codex；Windows、Claude Code、Cursor、Kiro、Pi、OpenCode 等适配不在首版支持范围。Windows Codex Desktop 与 WSL 可能使用不同的 `CODEX_HOME`，且 WSL 内的 `/proc` 无法检测原生 Windows Codex 进程，因此离线 guard 在该场景下必须显式指定实际目录并人工确认所有 Windows 进程已经退出。
