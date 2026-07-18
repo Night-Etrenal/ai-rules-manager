@@ -1,0 +1,46 @@
+name: Upstream derivative drift
+
+on:
+  schedule:
+    - cron: "53 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+    steps:
+      - name: Install fixed Debian runtime tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Check out product without credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare stored snapshot with upstream
+        run: |
+          git fetch --no-tags origin upstream/planning-with-files:refs/remotes/origin/upstream/planning-with-files
+          git remote add portfolio-upstream https://github.com/OthmanAdi/planning-with-files.git
+          git fetch --no-tags portfolio-upstream master
+          if ! git merge-base --is-ancestor origin/upstream/planning-with-files portfolio-upstream/master; then
+            echo "::error title=Upstream history changed::The current upstream is not a fast-forward of the stored snapshot. Manual provenance review is required."
+            exit 1
+          fi
+          behind="$(git rev-list --count origin/upstream/planning-with-files..portfolio-upstream/master)"
+          echo "upstream_new_commits=$behind"
+          if [ "$behind" -gt 0 ]; then
+            echo "::notice title=Upstream update available::$behind upstream commit(s) are available for isolated review. Run sh scripts/review-upstream.sh locally."
+            git diff --name-only origin/upstream/planning-with-files..portfolio-upstream/master | sed -n '1,300p'
+          else
+            echo "Stored upstream snapshot is current."
+          fi
