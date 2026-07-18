@@ -127,7 +127,7 @@ def check_action_pins(path: str, text: str) -> list[Finding]:
     if not path.startswith(".github/workflows/") or not path.endswith((".yml", ".yaml")):
         return findings
     for line_no, line in enumerate(text.splitlines(), 1):
-        match = re.search(r"^\s*uses:\s*([^@\s]+)@([^\s#]+)", line)
+        match = re.search(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", line)
         if not match:
             continue
         action, ref = match.groups()
