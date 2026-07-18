@@ -17,8 +17,41 @@ priority = 995
 key = "codex.local_database.live_mutation"
 value = "forbidden"
 category = "codex-local-io"
-instruction = "Never modify, checkpoint, vacuum, delete, move, replace or add triggers to logs_2.sqlite, state_5.sqlite or their WAL/SHM files while any Codex Desktop, CLI, app-server, IDE integration or remote-control process is running. During active development use read-only observation only."
+instruction = "Never modify, checkpoint, vacuum, delete, move, replace or add triggers to Codex SQLite databases while any Codex Desktop, CLI, app-server, IDE integration or remote-control process is running. Refuse maintenance on NFS, SMB, SSHFS, DrvFS, 9p and Windows-mounted paths."
 tags = ["codex", "sqlite", "safety"]
+
+[[rules]]
+id = "security.filesystem.repository-scope"
+title = "Repository Scope Only"
+scope = "security"
+priority = 994
+key = "filesystem.scope"
+value = "repository-only"
+category = "filesystem"
+instruction = "Treat the canonical Git repository root as the maximum default filesystem scope. Never recursively inspect or mutate /, the user home, mount roots or repository parents. Reject symlink and path traversal escapes."
+tags = ["filesystem", "containment"]
+
+[[rules]]
+id = "security.filesystem.destructive-confirmation"
+title = "Confirm Destructive Operations"
+scope = "security"
+priority = 993
+key = "filesystem.destructive_confirmation"
+value = "required"
+category = "filesystem"
+instruction = "Never automatically execute rm -rf, git clean -fdx, git reset --hard, recursive deletion, filesystem formatting or bulk replacement. Produce a canonical target manifest and require explicit action-time confirmation before destructive execution."
+tags = ["deletion", "safety"]
+
+[[rules]]
+id = "security.codex.no-full-access-default"
+title = "No Full Access by Default"
+scope = "security"
+priority = 992
+key = "codex.sandbox.default"
+value = "workspace-write-on-request"
+category = "sandbox"
+instruction = "Default to workspace-write with on-request approval. Do not use danger-full-access or approval policy never unless the user explicitly scopes and accepts the risk for a single task."
+tags = ["sandbox", "least-privilege"]
 
 [[rules]]
 id = "security.codex-io.bounded-hook-frequency"
@@ -39,7 +72,7 @@ priority = 985
 key = "codex.hooks.io_mode"
 value = "read-only"
 category = "codex-local-io"
-instruction = "Project hooks may read only bounded project state. They must never write under CODEX_HOME, invoke sqlite3, checkpoint or vacuum a database, modify triggers, rotate Codex internal files, start background processes or recursively scan the repository."
+instruction = "Project hooks may read only bounded, HMAC-attested project state. They must never write under CODEX_HOME, invoke sqlite3, checkpoint or vacuum a database, modify triggers, rotate Codex internal files, start background processes or recursively scan the repository."
 tags = ["codex", "hooks", "sqlite"]
 
 [[rules]]
@@ -70,9 +103,9 @@ title = "Require Explicit Offline SQLite Maintenance"
 scope = "security"
 priority = 970
 key = "codex.database.maintenance"
-value = "explicit-idle-only"
+value = "explicit-idle-local-only"
 category = "codex-local-io"
-instruction = "Normal coding, debugging, build, test, review and deployment requests must never trigger Codex database maintenance. Maintenance requires an explicit --apply flag, zero active Codex processes, backup of database/WAL/SHM, integrity validation, checkpoint verification and a rollback path."
+instruction = "Normal coding, debugging, build, test, review and deployment requests must never trigger Codex database maintenance. Maintenance requires --apply, --experimental and --accept-diagnostic-loss, zero active Codex processes, a supported local filesystem, an exclusive lock, bounded backup space, integrity validation, checkpoint verification and a rollback path."
 tags = ["codex", "maintenance", "sqlite"]
 
 [[rules]]
@@ -85,6 +118,17 @@ value = "reuse"
 category = "codex-local-io"
 instruction = "Do not repeat an equivalent repository inventory in the same session. Prefer git ls-files and directory-scoped ripgrep, reuse prior results unless Git HEAD, the index or requested scope changed, and never scan CODEX_HOME."
 tags = ["codex", "scan", "io"]
+
+[[rules]]
+id = "security.process.resource-budget"
+title = "Bound Background Resource Use"
+scope = "security"
+priority = 960
+key = "process.resource_budget"
+value = "bounded"
+category = "process"
+instruction = "Do not start unbounded background loops, recursive watchers, uncontrolled subagents or persistent child processes. Every long-running process needs a timeout, owner, stop condition and observable resource limit."
+tags = ["process", "cpu", "memory", "io"]
 
 [[rules]]
 id = "security.read-only-default"
