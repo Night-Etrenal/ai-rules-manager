@@ -10,6 +10,39 @@ instruction = "Never write credentials, private keys, session cookies or live to
 tags = ["secrets"]
 
 [[rules]]
+id = "security.codex-io.no-live-db-mutation"
+title = "Do Not Modify Active Codex Databases"
+scope = "security"
+priority = 995
+key = "codex.local_database.live_mutation"
+value = "forbidden"
+category = "codex-local-io"
+instruction = "Never modify, checkpoint, vacuum, delete, move, replace or add triggers to logs_2.sqlite, state_5.sqlite or their WAL/SHM files while any Codex Desktop, CLI, app-server, IDE integration or remote-control process is running. During active development use read-only observation only."
+tags = ["codex", "sqlite", "safety"]
+
+[[rules]]
+id = "security.codex-io.bounded-hook-frequency"
+title = "Bound Codex Hook Frequency"
+scope = "security"
+priority = 990
+key = "codex.hooks.frequency"
+value = "bounded"
+category = "codex-local-io"
+instruction = "Project hooks must not run on every streamed token, network event, file read, shell command or tool invocation. Minimal mode permits only SessionStart and PreCompact; higher-frequency hooks require an explicitly selected context mode."
+tags = ["codex", "hooks", "io"]
+
+[[rules]]
+id = "security.codex-io.read-only-hooks"
+title = "Keep Project Hooks Read-only"
+scope = "security"
+priority = 985
+key = "codex.hooks.io_mode"
+value = "read-only"
+category = "codex-local-io"
+instruction = "Project hooks may read only bounded project state. They must never write under CODEX_HOME, invoke sqlite3, checkpoint or vacuum a database, modify triggers, rotate Codex internal files, start background processes or recursively scan the repository."
+tags = ["codex", "hooks", "sqlite"]
+
+[[rules]]
 id = "security.review-hooks"
 title = "Review Lifecycle Hooks"
 scope = "security"
@@ -19,6 +52,39 @@ value = "explicit-review"
 category = "security"
 instruction = "Treat every new or changed lifecycle hook as executable code; inspect the exact command and approve it explicitly before use."
 tags = ["hooks", "supply-chain"]
+
+[[rules]]
+id = "security.codex-io.hook-budget"
+title = "Enforce a Small Hook Resource Budget"
+scope = "security"
+priority = 975
+key = "codex.hooks.resource_budget"
+value = "small"
+category = "codex-local-io"
+instruction = "Each generated project hook must have a one-second hard timeout, emit at most 4 KiB, read only known files, perform no recursive search, create no persistent application log and fail open when optional state is unavailable."
+tags = ["codex", "hooks", "performance"]
+
+[[rules]]
+id = "security.codex-io.explicit-maintenance"
+title = "Require Explicit Offline SQLite Maintenance"
+scope = "security"
+priority = 970
+key = "codex.database.maintenance"
+value = "explicit-idle-only"
+category = "codex-local-io"
+instruction = "Normal coding, debugging, build, test, review and deployment requests must never trigger Codex database maintenance. Maintenance requires an explicit --apply flag, zero active Codex processes, backup of database/WAL/SHM, integrity validation, checkpoint verification and a rollback path."
+tags = ["codex", "maintenance", "sqlite"]
+
+[[rules]]
+id = "security.codex-io.no-repeat-inventory"
+title = "Reuse Repository Inventory"
+scope = "security"
+priority = 965
+key = "filesystem.inventory.repeat"
+value = "reuse"
+category = "codex-local-io"
+instruction = "Do not repeat an equivalent repository inventory in the same session. Prefer git ls-files and directory-scoped ripgrep, reuse prior results unless Git HEAD, the index or requested scope changed, and never scan CODEX_HOME."
+tags = ["codex", "scan", "io"]
 
 [[rules]]
 id = "security.read-only-default"
