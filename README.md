@@ -74,8 +74,11 @@ rulesctl attest --clear
 ```bash
 rulesctl codex-io-audit
 rulesctl codex-io-audit --samples 3 --interval 10
+rulesctl codex-io-audit --details
 rulesctl codex-io-audit --json
 ```
+
+默认审计只采样文件大小和索引化的 `MAX(id)`；`--details` 才额外进行完整行数与 TRACE 统计，避免检测本身造成不必要的读取负载。
 
 `codex-io-guard` 和 `codex-io-restore` 默认都是 dry-run。只有显式传入 `--apply`，并且检测不到任何 Codex/app-server 进程时，才允许离线修改：
 
