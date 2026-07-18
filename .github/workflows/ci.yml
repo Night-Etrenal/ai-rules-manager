@@ -8,7 +8,27 @@ permissions:
   contents: read
 
 jobs:
+  security:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+    steps:
+      - name: Install bounded scanner runtime
+        run: |
+          if ! (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends ca-certificates git python3) >/tmp/apt-security.log 2>&1; then
+            cat /tmp/apt-security.log
+            exit 1
+          fi
+          rm -rf /var/lib/apt/lists/* /tmp/apt-security.log
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan Git-tracked repository files
+        run: python3 tools/portfolio_security_scan.py --root . --mode repository
+
   test:
+    needs: security
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -21,15 +41,13 @@ jobs:
     steps:
       - name: Install Debian test tools
         run: |
-          apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends ca-certificates git python3 python3-pip python3-setuptools python3-venv python3-wheel
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git python3 python3-pip python3-setuptools python3-venv python3-wheel
           rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Scan Git-tracked repository files
-        run: python3 tools/portfolio_security_scan.py --root . --mode repository
       - name: Create virtual environment
         run: python3 -m venv --system-site-packages .venv
       - name: Install package without network build isolation
