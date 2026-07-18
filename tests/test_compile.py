@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -22,20 +23,42 @@ class CompileTests(unittest.TestCase):
             self.assertIn("Debian Platform", (root / "AGENTS.md").read_text(encoding="utf-8"))
 
     def test_attestation_detects_change(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home:
+            root = Path(tmp)
+            old_home = os.environ.get("HOME")
+            os.environ["HOME"] = home
+            try:
+                self.assertEqual(main(["init", "--root", str(root), "--name", "demo"]), 0)
+                old = Path.cwd()
+                os.chdir(root)
+                try:
+                    self.assertEqual(main(["attest"]), 0)
+                    self.assertEqual(main(["attest", "--show"]), 0)
+                    active = (root / ".planning/.active_plan").read_text().strip()
+                    plan = root / ".planning" / active / "task_plan.md"
+                    plan.write_text(plan.read_text() + "\nchanged\n")
+                    self.assertEqual(main(["attest", "--show"]), 1)
+                finally:
+                    os.chdir(old)
+            finally:
+                if old_home is None:
+                    os.environ.pop("HOME", None)
+                else:
+                    os.environ["HOME"] = old_home
+
+    def test_compile_does_not_rewrite_unchanged_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.assertEqual(main(["init", "--root", str(root), "--name", "demo"]), 0)
+            before = (root / "AGENTS.md").stat().st_mtime_ns
+            time.sleep(0.01)
             old = Path.cwd()
             os.chdir(root)
             try:
-                self.assertEqual(main(["attest"]), 0)
-                self.assertEqual(main(["attest", "--show"]), 0)
-                active = (root / ".planning/.active_plan").read_text().strip()
-                plan = root / ".planning" / active / "task_plan.md"
-                plan.write_text(plan.read_text() + "\nchanged\n")
-                self.assertEqual(main(["attest", "--show"]), 1)
+                self.assertEqual(main(["compile"]), 0)
             finally:
                 os.chdir(old)
+            self.assertEqual(before, (root / "AGENTS.md").stat().st_mtime_ns)
 
 
 if __name__ == "__main__":
